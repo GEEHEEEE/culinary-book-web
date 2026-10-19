@@ -1,8 +1,5 @@
-import db
+﻿import db
 
-# ---------------------------------------------------------
-# 1. DAO для Категорий
-# ---------------------------------------------------------
 class CategoryDAO:
     @staticmethod
     def get_all():
@@ -12,7 +9,6 @@ class CategoryDAO:
         rows = cur.fetchall()
         conn.close()
         return rows
-
     @staticmethod
     def insert(name):
         conn = db.get_connection()
@@ -22,7 +18,6 @@ class CategoryDAO:
         new_id = cur.lastrowid
         conn.close()
         return new_id
-
     @staticmethod
     def update(cat_id, name):
         conn = db.get_connection()
@@ -30,7 +25,6 @@ class CategoryDAO:
         cur.execute("UPDATE categories SET name = ? WHERE id = ?", (name, cat_id))
         conn.commit()
         conn.close()
-
     @staticmethod
     def delete(cat_id):
         conn = db.get_connection()
@@ -39,9 +33,6 @@ class CategoryDAO:
         conn.commit()
         conn.close()
 
-# ---------------------------------------------------------
-# 2. DAO для Ингредиентов
-# ---------------------------------------------------------
 class IngredientDAO:
     @staticmethod
     def get_all():
@@ -51,7 +42,6 @@ class IngredientDAO:
         rows = cur.fetchall()
         conn.close()
         return rows
-
     @staticmethod
     def insert(name, unit):
         conn = db.get_connection()
@@ -61,15 +51,16 @@ class IngredientDAO:
         new_id = cur.lastrowid
         conn.close()
         return new_id
-
     @staticmethod
     def update(ing_id, name, unit):
         conn = db.get_connection()
         cur = conn.cursor()
-        cur.execute("UPDATE ingredients SET name = ?, unit = ? WHERE id = ?", (name, unit, ing_id))
+        if name:
+            cur.execute("UPDATE ingredients SET name = ?, unit = ? WHERE id = ?", (name, unit, ing_id))
+        else:
+            cur.execute("UPDATE ingredients SET unit = ? WHERE id = ?", (unit, ing_id))
         conn.commit()
         conn.close()
-
     @staticmethod
     def delete(ing_id):
         conn = db.get_connection()
@@ -78,38 +69,29 @@ class IngredientDAO:
             cur.execute("DELETE FROM ingredients WHERE id = ?", (ing_id,))
             conn.commit()
         except db.sqlite3.IntegrityError:
-            # Срабатывает ограничение ON DELETE RESTRICT
             raise Exception("Нельзя удалить ингредиент, так как он используется в рецептах!")
         finally:
             conn.close()
 
-# ---------------------------------------------------------
-# 3. DAO для Рецептов
-# ---------------------------------------------------------
 class RecipeDAO:
     @staticmethod
     def get_all(search_text="", category_id=None):
         conn = db.get_connection()
         cur = conn.cursor()
-        
         query = """
-            SELECT r.id, r.title, c.name as category_name, r.default_servings 
+            SELECT r.id, r.title, r.image_url, r.equipment, r.instructions, c.name as category_name, r.default_servings 
             FROM recipes r
             LEFT JOIN categories c ON r.category_id = c.id
             WHERE 1=1
         """
         params = []
-        
         if search_text:
-            query += " AND r.title LIKE ?"
+            query += " AND LOWER(r.title) LIKE LOWER(?)"
             params.append(f"%{search_text}%")
-            
         if category_id:
             query += " AND r.category_id = ?"
             params.append(category_id)
-            
         query += " ORDER BY r.title"
-        
         cur.execute(query, params)
         rows = cur.fetchall()
         conn.close()
@@ -125,21 +107,18 @@ class RecipeDAO:
         return row
 
     @staticmethod
-    def insert(title, description, category_id, servings, ingredients_list):
+    def insert(title, description, category_id, servings, ingredients_list, image_url=None, equipment=None, instructions=None):
         conn = db.get_connection()
         cur = conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO recipes (title, description, category_id, default_servings) VALUES (?, ?, ?, ?)",
-                (title, description, category_id, servings)
+                "INSERT INTO recipes (title, description, category_id, default_servings, image_url, equipment, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (title, description, category_id, servings, image_url, equipment, instructions)
             )
             recipe_id = cur.lastrowid
-            
-            for ing_id, amount in ingredients_list:
-                cur.execute(
-                    "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount) VALUES (?, ?, ?)",
-                    (recipe_id, ing_id, amount)
-                )
+            for item in ingredients_list:
+                ing_id, amount = item[0], item[1]
+                cur.execute("INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount) VALUES (?, ?, ?)", (recipe_id, ing_id, amount))
             conn.commit()
             return recipe_id
         except Exception as e:
@@ -149,23 +128,18 @@ class RecipeDAO:
             conn.close()
 
     @staticmethod
-    def update(recipe_id, title, description, category_id, servings, ingredients_list):
-        """Обновляет рецепт и полностью перезаписывает его состав."""
+    def update(recipe_id, title, description, category_id, servings, ingredients_list, image_url=None, equipment=None, instructions=None):
         conn = db.get_connection()
         cur = conn.cursor()
         try:
             cur.execute(
-                "UPDATE recipes SET title = ?, description = ?, category_id = ?, default_servings = ? WHERE id = ?",
-                (title, description, category_id, servings, recipe_id)
+                "UPDATE recipes SET title = ?, description = ?, category_id = ?, default_servings = ?, image_url = ?, equipment = ?, instructions = ? WHERE id = ?",
+                (title, description, category_id, servings, image_url, equipment, instructions, recipe_id)
             )
-            
             cur.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
-            
-            for ing_id, amount in ingredients_list:
-                cur.execute(
-                    "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount) VALUES (?, ?, ?)",
-                    (recipe_id, ing_id, amount)
-                )
+            for item in ingredients_list:
+                ing_id, amount = item[0], item[1]
+                cur.execute("INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount) VALUES (?, ?, ?)", (recipe_id, ing_id, amount))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -181,9 +155,6 @@ class RecipeDAO:
         conn.commit()
         conn.close()
 
-# ---------------------------------------------------------
-# 4. DAO для Состава рецепта и Генерации списка покупок
-# ---------------------------------------------------------
 class RecipeIngredientDAO:
     @staticmethod
     def get_by_recipe(recipe_id):
@@ -202,21 +173,15 @@ class RecipeIngredientDAO:
 
     @staticmethod
     def generate_shopping_list(recipes_data):
-        if not recipes_data:
-            return []
-
+        if not recipes_data: return []
         conn = db.get_connection()
         cur = conn.cursor()
-        
         unions = []
         params = []
-        
         for item in recipes_data:
             unions.append("SELECT ? AS recipe_id, ? AS target_servings")
             params.extend([item['id'], item['servings']])
-            
         union_sql = " UNION ALL ".join(unions)
-        
         query = f"""
             SELECT i.name, i.unit, SUM(ri.amount * (s.target_servings * 1.0 / r.default_servings)) AS total_amount
             FROM recipe_ingredients ri
@@ -226,8 +191,39 @@ class RecipeIngredientDAO:
             GROUP BY i.id, i.name, i.unit
             ORDER BY i.name
         """
-        
         cur.execute(query, params)
+        rows = cur.fetchall()
+        conn.close()
+        return rows
+
+class StatsDAO:
+    @staticmethod
+    def get_recipes_by_category():
+        conn = db.get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT c.name AS category_name, COUNT(r.id) AS recipe_count
+            FROM categories c
+            LEFT JOIN recipes r ON r.category_id = c.id
+            GROUP BY c.id, c.name
+            ORDER BY recipe_count DESC
+        """)
+        rows = cur.fetchall()
+        conn.close()
+        return rows
+
+    @staticmethod
+    def get_top_ingredients(limit=5):
+        conn = db.get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT i.name, i.unit, COUNT(ri.recipe_id) AS usage_count
+            FROM ingredients i
+            JOIN recipe_ingredients ri ON i.id = ri.ingredient_id
+            GROUP BY i.id, i.name, i.unit
+            ORDER BY usage_count DESC
+            LIMIT ?
+        """, (limit,))
         rows = cur.fetchall()
         conn.close()
         return rows
