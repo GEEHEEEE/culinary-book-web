@@ -1,0 +1,84 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Список покупок</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f4; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .columns { display: flex; gap: 20px; }
+        .col { flex: 1; }
+        .recipe-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; background: #f9f9f9; padding: 10px; border-radius: 4px; }
+        .recipe-row input[type="checkbox"] { width: 18px; height: 18px; }
+        .recipe-title { flex: 1; font-weight: bold; }
+        .recipe-row input[type="number"] { width: 60px; padding: 4px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #2196F3; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; font-weight: bold; }
+        button:hover { background: #1976D2; }
+        .shopping-list { background: #e8f5e9; padding: 15px; border-radius: 4px; border: 1px solid #c8e6c9;}
+        ul { padding-left: 20px; }
+        a { color: #2196F3; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/">← Назад к рецептам</a>
+        <h1>Список покупок</h1>
+        
+        <div class="columns">
+            <div class="col">
+                <h3>Выберите рецепты и укажите порции:</h3>
+                <form method="POST">
+                    {% for recipe in recipes %}
+                    <div class="recipe-row">
+                        <input type="checkbox" name="recipe_ids" value="{{ recipe.id }}" id="r{{ recipe.id }}">
+                        <label for="r{{ recipe.id }}" class="recipe-title">{{ recipe.title }}</label>
+                        <span style="font-size: 0.9em; color: #666;">Порций:</span>
+                        <input type="number" name="servings_{{ recipe.id }}" value="{{ recipe.default_servings }}" min="1">
+                    </div>
+                    {% endfor %}
+                    <button type="submit">Сформировать список</button>
+                </form>
+            </div>
+            
+            <div class="col">
+                <h3>Итоговый список:</h3>
+                <div class="shopping-list">
+                    {% if shopping_list %}
+                        <ul>
+                        {% for item in shopping_list %}
+                            <li style="margin-bottom: 8px;">
+                                {{ item.name }} — <b>
+                                {% set amt = item.total_amount %}
+                                {# Убираем .0, если число целое #}
+                                {% if amt == amt|int %}
+                                    {{ amt|int }}
+                                {% else %}
+                                    {{ amt|round(2) }}
+                                {% endif %}
+                                </b> 
+                                {# Склонение единиц измерения #}
+                                {% set u = item.unit %}
+                                {% if u == 'пакетик' or u == 'пакетики' or u == 'пакетиков' %}
+                                    {% if amt == 1 %}пакетик
+                                    {% elif amt >= 2 and amt <= 4 %}пакетика
+                                    {% else %}пакетиков{% endif %}
+                                {% elif u == 'щепотка' or u == 'щепотки' or u == 'щепоток' %}
+                                    {% if amt == 1 %}щепотка
+                                    {% elif amt >= 2 and amt <= 4 %}щепотки
+                                    {% else %}щепоток{% endif %}
+                                {% else %}
+                                    {{ u }}
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>Выберите рецепты слева и нажмите кнопку.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

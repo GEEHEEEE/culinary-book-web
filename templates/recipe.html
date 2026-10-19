@@ -1,0 +1,32 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ recipe.title }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f4; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        a { color: #2196F3; text-decoration: none; }
+        ul { line-height: 1.8; font-size: 18px; }
+        .badge { background: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-weight: bold; color: #333; }
+        .btn-web { display: inline-block; background: #4CAF50; color: white; padding: 10px 15px; border-radius: 4px; margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/">← Назад к списку</a>
+        <h1>{{ recipe.title }}</h1>
+        <p style="color: #666;">Порций по умолчанию: <span class="badge">{{ recipe.default_servings }}</span></p>
+        
+        <h3>Ингредиенты:</h3>
+        <ul>
+            {% for ing in ingredients %}
+            <li>{{ ing.name }} — <b>{{ ing.amount|int if ing.amount == ing.amount|int else ing.amount }}</b> {{ ing.unit }}</li>
+            {% endfor %}
+        </ul>
+
+        <a href="/recipe/{{ recipe.id }}/web" class="btn-web">🌐 Поискать этот рецепт в интернете</a>
+    </div>
+</body>
+</html>
